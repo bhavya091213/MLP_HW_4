@@ -10,15 +10,63 @@ This file defines:
 - The LeNet-5 convolutional architecture (C1, S2, C3, S4, C5, F6).
 - An RBF output layer whose centers are constructed from 7x12 digit bitmaps.
 
-The training loop and evaluation code for Parts 1.2 and 1.3 will be added later.
+Part 1.1 of the homework only requires the *architecture* and the use of
+DIGIT to build the RBF prototypes. Training, MNIST loading, and evaluation
+will be added for Parts 1.2 and 1.3.
+
+Recommended usage (later, in your training script):
+
+    from hw4_files.data import DIGIT
+    from LeNet5_Implementation.main import create_lenet5_from_digit
+
+    model = create_lenet5_from_digit(DIGIT)
+
+RBF TEMPLATE REASONING (for the writeup):
+-----------------------------------------
+The paper says that each output unit compares the 84-dimensional F6 code
+against a 7x12 bitmap template for the corresponding digit. To turn the
+DIGIT data into those templates, we do:
+
+1. For each digit d in {0..9}, collect all provided bitmaps for that digit.
+   DIGIT[d] may already be a single 7x12 array, or a list of arrays.
+
+2. Normalize shapes:
+   - If a bitmap is 1D of length 84, reshape to (7, 12).
+   - If it is 2D (7, 12), use directly.
+   - If it is 2D (12, 7), transpose.
+   - If it has some other resolution, resize to (7, 12) using nearest-
+     neighbor interpolation. This guarantees the final template matches
+     the 7x12 size implied by the 84 units in F6.
+
+3. If multiple bitmaps exist for one digit, we average them elementwise
+   and then threshold at 0.5. This is a majority-vote scheme that reduces
+   noise and produces a single clean “prototype” bitmap per class, which
+   matches the idea of LeNet-5 encoding an idealized version of each digit.
+
+4. We then map 0 -> -1 and 1 -> +1. The scaled tanh activation used in
+   LeNet-5 produces outputs mostly in [-1.7159, 1.7159], so centering
+   the prototypes around +/-1 keeps the RBF distances numerically well
+   conditioned and makes “close in Euclidean distance” correspond to a
+   good match between F6 activations and the bitmap.
+
+5. Finally we flatten each 7x12 bitmap to a length-84 vector and stack
+   them into a (10, 84) tensor of RBF centers.
+
+Weight initialization:
+----------------------
+Following Appendix A of the paper, each conv / linear weight is
+initialized from a uniform distribution
+
+    U(-2.4/fan_in, 2.4/fan_in)
+
+where fan_in is the number of inputs to that neuron
+(e.g., in_channels * kernel_height * kernel_width for conv layers,
+and in_features for linear layers). Biases are initialized to zero.
 """
+
 from __future__ import annotations
-import numpy
 
-from dataclasses import dataclass
-from typing import Iterable, List, Optional, Sequence, Tuple
-
-import math
+from typing import List, Sequence
 
 import torch
 import torch.nn as nn
@@ -141,11 +189,16 @@ class RBFOutputLayer(nn.Module):
 def _to_tensor(arr: "torch.Tensor | Sequence | 'numpy.ndarray'") -> torch.Tensor:
     """
     Best-effort conversion of various array-like inputs to a float Tensor.
+
+    This helper avoids making numpy a hard dependency. If `arr` is a
+    numpy array and numpy is available, we convert via torch.from_numpy;
+    otherwise we fall back to torch.tensor(arr).
     """
     if isinstance(arr, torch.Tensor):
         return arr.float()
     try:
         import numpy as np  # type: ignore[import]
+
         if isinstance(arr, np.ndarray):
             return torch.from_numpy(arr).float()
     except Exception:
@@ -165,38 +218,18 @@ def build_rbf_centers_from_digit(
     """
     Construct RBF centers from the provided DIGIT data.
 
-    The homework provides a DIGIT dataset that encodes stylized digit
-    bitmaps. There are many ways to obtain a single 7x12 bitmap per digit.
-    This helper implements a simple and robust strategy:
+    Strategy (matches the explanation in the module docstring):
 
-    1. Interpret `digit_data` as a sequence indexed by class label (0..9).
-       Each entry may itself be:
-           - a single bitmap, or
-           - a collection of candidate bitmaps for that class.
-    2. Convert each bitmap to shape (height, width). If necessary, this
-       function will:
-           - reshape 1D arrays of length height*width to (height, width);
-           - transpose arrays of shape (width, height) to (height, width).
-    3. If multiple bitmaps are available for a class, compute their
-       elementwise mean and then binarize by thresholding at 0.5.
-       This acts as a "majority vote" per pixel and yields a single
-       stylized bitmap per digit.
-    4. Map 0 -> background_value (typically -1) and 1 -> foreground_value
-       (typically +1), so the prototype values roughly match the range
-       of the F6 activations.
-    5. Flatten each 7x12 bitmap to a vector of length 84 and stack
-       them into a tensor of shape (num_classes, 84).
-
-    Args:
-        digit_data: Sequence containing per-class bitmap data. The exact
-            structure depends on the homework's `DIGIT` object, but this
-            function is written to handle several common cases (single
-            bitmap per class or list of bitmaps per class).
-        num_classes: Number of digit classes to use (default: 10).
-        height: Desired template height (default: 7).
-        width: Desired template width (default: 12).
-        foreground_value: Value to assign to foreground pixels (default: +1).
-        background_value: Value to assign to background pixels (default: -1).
+    1. Treat `digit_data[d]` as all bitmap(s) corresponding to digit d.
+       It may be a single bitmap or a collection.
+    2. Convert each bitmap to shape (height, width), reshaping, transposing,
+       or nearest-neighbor resizing as needed.
+    3. If multiple bitmaps exist for a digit, average them and then
+       threshold at 0.5 to get a binary majority-vote template.
+    4. Map 0 -> background_value (default -1) and 1 -> foreground_value
+       (default +1) so values are roughly aligned with the scaled tanh
+       activations.
+    5. Flatten each 7x12 bitmap to a vector of length 84 and stack them.
 
     Returns:
         Tensor of shape (num_classes, height * width) with values in
@@ -312,6 +345,28 @@ class LeNet5(nn.Module):
 
         self.activation = ScaledTanh()
         self.rbf = RBFOutputLayer(rbf_centers)
+
+        # Initialize weights following Appendix A of the LeNet-5 paper.
+        self._init_weights()
+
+    def _init_weights(self) -> None:
+        """
+        Initialize conv and linear weights with U(-2.4/fan_in, 2.4/fan_in),
+        as described in the paper. Biases are initialized to zero.
+        """
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                fan_in = m.in_channels * m.kernel_size[0] * m.kernel_size[1]
+                bound = 2.4 / fan_in
+                nn.init.uniform_(m.weight, -bound, bound)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+            elif isinstance(m, nn.Linear):
+                fan_in = m.in_features
+                bound = 2.4 / fan_in
+                nn.init.uniform_(m.weight, -bound, bound)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
         """
