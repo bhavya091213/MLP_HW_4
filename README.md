@@ -7,4 +7,4 @@
 
 ## activate venv
 
-* source ./.venv/bin/activate# MLP_HW_4
+* source ./.venv/bin/activate
