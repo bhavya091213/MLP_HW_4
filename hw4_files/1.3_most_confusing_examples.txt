@@ -1,0 +1,14 @@
+Most confusing misclassified examples per true digit (MNIST test set)
+
+Format: digit x: image y was misclassified as digit b with highest confidence a
+
+digit 0: image 1621 was misclassified as digit 6 with highest confidence 1.0000
+digit 1: image 6783 was misclassified as digit 6 with highest confidence 1.0000
+digit 2: image 659 was misclassified as digit 1 with highest confidence 1.0000
+digit 3: image 449 was misclassified as digit 5 with highest confidence 1.0000
+digit 4: image 1112 was misclassified as digit 6 with highest confidence 1.0000
+digit 5: image 1393 was misclassified as digit 3 with highest confidence 1.0000
+digit 6: image 2135 was misclassified as digit 1 with highest confidence 1.0000
+digit 7: image 1226 was misclassified as digit 2 with highest confidence 1.0000
+digit 8: image 2896 was misclassified as digit 0 with highest confidence 1.0000
+digit 9: image 1247 was misclassified as digit 5 with highest confidence 1.0000
