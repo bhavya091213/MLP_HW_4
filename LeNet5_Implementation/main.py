@@ -65,7 +65,7 @@ and in_features for linear layers). Biases are initialized to zero.
 """
 
 from __future__ import annotations
-
+import numpy
 from typing import List, Sequence
 
 import torch
