@@ -1,0 +1,22 @@
+Most Confusing Misclassified Examples - Robust LeNet (Part 2)
+======================================================================
+
+Overall Test Accuracy: 99.64%
+Overall Test Error Rate: 0.36%
+
+Format: digit X: image Y was misclassified as digit Z with confidence C
+
+----------------------------------------------------------------------
+
+Digit 0: Image  9634 was misclassified as digit 6 with confidence 0.6894
+Digit 1: Image  4201 was misclassified as digit 7 with confidence 0.4772
+Digit 2: Image  9664 was misclassified as digit 7 with confidence 0.5693
+Digit 3: Image  4740 was misclassified as digit 5 with confidence 0.7164
+Digit 4: Image  2130 was misclassified as digit 9 with confidence 0.9974
+Digit 5: Image  2597 was misclassified as digit 3 with confidence 0.9999
+Digit 6: Image  3422 was misclassified as digit 0 with confidence 0.9872
+Digit 7: Image  5654 was misclassified as digit 2 with confidence 0.9605
+Digit 8: Image  8279 was misclassified as digit 4 with confidence 0.9823
+Digit 9: Image  1901 was misclassified as digit 4 with confidence 0.9475
+
+======================================================================
